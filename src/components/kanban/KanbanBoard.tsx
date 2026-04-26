@@ -1,13 +1,7 @@
 import { useState } from 'react'
 import {
-  DndContext,
-  DragOverlay,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  type DragStartEvent,
-  type DragEndEvent,
+  DndContext, DragOverlay, PointerSensor, TouchSensor,
+  useSensor, useSensors, type DragStartEvent, type DragEndEvent,
 } from '@dnd-kit/core'
 import { Plus, Loader2, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -59,20 +53,16 @@ export function KanbanBoard() {
   }
 
   function onDragStart({ active }: DragStartEvent) {
-    const task = tasks.find((t) => t.id === active.id)
-    setActiveTask(task ?? null)
+    setActiveTask(tasks.find((t) => t.id === active.id) ?? null)
   }
 
   function onDragEnd({ active, over }: DragEndEvent) {
     setActiveTask(null)
     if (!over) return
-
     const newStatus = String(over.id) as TaskStatus
     if (!VALID_STATUSES.includes(newStatus)) return
-
     const task = tasks.find((t) => t.id === active.id)
     if (!task || task.status === newStatus) return
-
     updateStatus.mutate({ id: task.id, status: newStatus })
   }
 
@@ -92,8 +82,8 @@ export function KanbanBoard() {
   if (error) {
     const msg = error instanceof Error ? error.message : String(error)
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-2">
-        <div className="flex items-center gap-2 text-red-600">
+      <div className="bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl p-4 space-y-2">
+        <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
           <AlertCircle className="size-4 shrink-0" />
           <p className="text-sm font-medium">Erro ao carregar tarefas</p>
         </div>
@@ -105,7 +95,7 @@ export function KanbanBoard() {
   return (
     <>
       <div className="flex items-center justify-between mb-5">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-slate-400">
           {tasks.length === 0
             ? 'Nenhuma tarefa ainda. Crie a primeira!'
             : `${tasks.length} tarefa${tasks.length !== 1 ? 's' : ''} no total`}
@@ -143,12 +133,7 @@ export function KanbanBoard() {
         </DragOverlay>
       </DndContext>
 
-      <TaskModal
-        open={modalOpen}
-        onClose={closeModal}
-        task={editingTask}
-        defaultStatus={defaultStatus}
-      />
+      <TaskModal open={modalOpen} onClose={closeModal} task={editingTask} defaultStatus={defaultStatus} />
 
       <DeleteConfirmModal
         open={!!deleteTarget}

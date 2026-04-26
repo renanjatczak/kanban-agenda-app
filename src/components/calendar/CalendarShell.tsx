@@ -1,69 +1,166 @@
-import { useState } from 'react'
-import { addMonths, subMonths, addDays, subDays, isSameMonth } from 'date-fns'
-import { CalendarDays } from 'lucide-react'
+import { useState, useMemo } from 'react'
+import {
+  addMonths, subMonths, addWeeks, subWeeks, addDays, subDays,
+  isSameMonth, startOfMonth, endOfMonth, startOfWeek, endOfWeek,
+  startOfDay, endOfDay, parseISO,
+} from 'date-fns'
+import { Loader2, AlertCircle } from 'lucide-react'
 import { CalendarHeader } from './CalendarHeader'
 import { MonthView } from './MonthView'
+import { WeekView } from './WeekView'
+import { DayView } from './DayView'
+import { EventDetailModal } from './EventDetailModal'
+import { EventFormModal } from './EventFormModal'
+import { useEvents } from '@/hooks/useEvents'
+import { EVENT_TYPE_COLORS } from '@/utils/eventColors'
 import type { CalendarView, CalendarEvent } from '@/types/calendar'
-
-// Demo data — will be replaced by Supabase events in Phase 5
-const today = new Date()
-const MOCK_EVENTS: CalendarEvent[] = [
-  { id: '1', title: 'Reunião de equipe',   date: today,               color: '#6366f1', type: 'meeting'  },
-  { id: '2', title: 'Standup diário',      date: addDays(today, 1),   color: '#6366f1', type: 'meeting'  },
-  { id: '3', title: 'Revisão de PR',       date: addDays(today, 2),   color: '#8b5cf6', type: 'focus'    },
-  { id: '4', title: 'Code Review',         date: addDays(today, 2),   color: '#8b5cf6', type: 'focus'    },
-  { id: '5', title: 'Almoço com cliente',  date: addDays(today, 4),   color: '#f59e0b', type: 'personal' },
-  { id: '6', title: 'Planning do sprint',  date: addDays(today, 7),   color: '#6366f1', type: 'meeting'  },
-  { id: '7', title: 'Deadline v2.0',       date: addDays(today, 10),  color: '#ef4444', type: 'reminder' },
-  { id: '8', title: 'Lembrete: relatório', date: addDays(today, 12),  color: '#ef4444', type: 'reminder' },
-  { id: '9', title: 'Sessão de foco',      date: addDays(today, 14),  color: '#8b5cf6', type: 'focus'    },
-  { id: 'a', title: 'Deploy produção',     date: subDays(today, 2),   color: '#10b981', type: 'focus'    },
-  { id: 'b', title: 'Retrospectiva',       date: subDays(today, 1),   color: '#6366f1', type: 'meeting'  },
-]
+import type { Event, EventType } from '@/types'
 
 export function CalendarShell() {
   const [currentDate, setCurrentDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date())
+  const [selectedDate, setSelectedDate] = useState<Date>(new Date())
   const [view, setView] = useState<CalendarView>('month')
+
+  const [detailEvent, setDetailEvent] = useState<Event | null>(null)
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
+
+  const { calStart, calEnd } = useMemo(() => {
+    if (view === 'month') {
+      const s = startOfMonth(currentDate)
+      const e = endOfMonth(currentDate)
+      return { calStart: startOfWeek(s, { weekStartsOn: 0 }), calEnd: endOfWeek(e, { weekStartsOn: 0 }) }
+    }
+    if (view === 'week') {
+      return {
+        calStart: startOfWeek(currentDate, { weekStartsOn: 0 }),
+        calEnd: endOfWeek(currentDate, { weekStartsOn: 0 }),
+      }
+    }
+    return { calStart: startOfDay(currentDate), calEnd: endOfDay(currentDate) }
+  }, [view, currentDate])
+
+  const { data: events = [], isLoading, error } = useEvents(calStart, calEnd)
+
+  const calendarEvents: CalendarEvent[] = useMemo(
+    () =>
+      events.map((e) => ({
+        id: e.id,
+        title: e.title,
+        date: parseISO(e.start_time),
+        startTime: parseISO(e.start_time),
+        endTime: parseISO(e.end_time),
+        color: e.color ?? EVENT_TYPE_COLORS[e.type as EventType],
+        type: e.type as CalendarEvent['type'],
+      })),
+    [events],
+  )
+
+  function handlePrev() {
+    if (view === 'month') setCurrentDate((d) => subMonths(d, 1))
+    else if (view === 'week') setCurrentDate((d) => subWeeks(d, 1))
+    else setCurrentDate((d) => subDays(d, 1))
+  }
+
+  function handleNext() {
+    if (view === 'month') setCurrentDate((d) => addMonths(d, 1))
+    else if (view === 'week') setCurrentDate((d) => addWeeks(d, 1))
+    else setCurrentDate((d) => addDays(d, 1))
+  }
 
   function handleSelectDay(date: Date) {
     setSelectedDate(date)
-    if (!isSameMonth(date, currentDate)) {
+    if (!isSameMonth(date, currentDate) && view === 'month') {
       setCurrentDate(date)
     }
   }
 
+  function handleEventClick(id: string) {
+    const event = events.find((e) => e.id === id)
+    if (event) setDetailEvent(event)
+  }
+
+  function openCreate() {
+    setEditingEvent(null)
+    setIsCreating(true)
+  }
+
+  function openEdit(event: Event) {
+    setDetailEvent(null)
+    setEditingEvent(event)
+  }
+
+  function closeForm() {
+    setIsCreating(false)
+    setEditingEvent(null)
+  }
+
+  const formOpen = isCreating || !!editingEvent
+
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+    <div className="bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden shadow-sm">
       <CalendarHeader
         currentDate={currentDate}
         view={view}
-        onPrev={() => setCurrentDate((d) => subMonths(d, 1))}
-        onNext={() => setCurrentDate((d) => addMonths(d, 1))}
+        onPrev={handlePrev}
+        onNext={handleNext}
         onToday={() => { setCurrentDate(new Date()); setSelectedDate(new Date()) }}
         onViewChange={setView}
+        onNewEvent={openCreate}
       />
 
-      {view === 'month' && (
+      {isLoading && (
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="size-6 text-indigo-500 animate-spin" />
+        </div>
+      )}
+
+      {error && (
+        <div className="flex items-center gap-2 text-red-600 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900 rounded-xl m-4 p-4">
+          <AlertCircle className="size-4 shrink-0" />
+          <p className="text-sm">Erro ao carregar eventos.</p>
+        </div>
+      )}
+
+      {!isLoading && !error && view === 'month' && (
         <MonthView
           currentDate={currentDate}
           selectedDate={selectedDate}
-          events={MOCK_EVENTS}
+          events={calendarEvents}
           onSelectDay={handleSelectDay}
+          onEventClick={handleEventClick}
         />
       )}
 
-      {view !== 'month' && (
-        <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
-          <div className="size-12 bg-indigo-100 rounded-full flex items-center justify-center">
-            <CalendarDays className="size-6 text-indigo-500" />
-          </div>
-          <p className="text-sm font-medium text-gray-700">
-            Visualização {view === 'week' ? 'semanal' : 'diária'}
-          </p>
-          <p className="text-xs text-gray-400">Disponível na Fase 5.</p>
-        </div>
+      {!isLoading && !error && view === 'week' && (
+        <WeekView
+          currentDate={currentDate}
+          events={calendarEvents}
+          onEventClick={handleEventClick}
+          onDayClick={handleSelectDay}
+        />
       )}
+
+      {!isLoading && !error && view === 'day' && (
+        <DayView
+          currentDate={currentDate}
+          events={calendarEvents}
+          onEventClick={handleEventClick}
+        />
+      )}
+
+      <EventDetailModal
+        event={detailEvent}
+        onClose={() => setDetailEvent(null)}
+        onEdit={openEdit}
+      />
+
+      <EventFormModal
+        open={formOpen}
+        onClose={closeForm}
+        event={editingEvent}
+        defaultDate={isCreating ? selectedDate : null}
+      />
     </div>
   )
 }
