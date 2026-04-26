@@ -1,9 +1,8 @@
+import { RouterProvider } from 'react-router-dom'
+import { router } from './router'
+
 function App() {
-  return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-      <p className="text-gray-500 text-sm">Kanban & Agenda — Phase 1 setup complete</p>
-    </div>
-  )
+  return <RouterProvider router={router} />
 }
 
 export default App
