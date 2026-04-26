@@ -73,6 +73,15 @@ export function EventFormModal({ open, onClose, event, defaultDate }: EventFormM
   } = useForm<FormData>({ resolver: zodResolver(schema) })
 
   const selectedColor = useWatch({ control, name: 'color' }) ?? PRESET_COLORS[0]
+  const startTimeValue = useWatch({ control, name: 'start_time' }) ?? ''
+  const endTimeValue = useWatch({ control, name: 'end_time' }) ?? ''
+
+  // Derive allDay from form values — avoids duplicated state
+  const allDay =
+    startTimeValue.length >= 16 &&
+    endTimeValue.length >= 16 &&
+    startTimeValue.slice(11, 16) === '00:00' &&
+    endTimeValue.slice(11, 16) === '23:59'
 
   useEffect(() => {
     if (!open) return
@@ -102,6 +111,17 @@ export function EventFormModal({ open, onClose, event, defaultDate }: EventFormM
     }
   }, [open, event, defaultDate, reset])
 
+  function handleAllDayToggle(checked: boolean) {
+    const datePrefix = startTimeValue.slice(0, 10) || format(defaultDate ?? new Date(), 'yyyy-MM-dd')
+    if (checked) {
+      setValue('start_time', `${datePrefix}T00:00`)
+      setValue('end_time', `${datePrefix}T23:59`)
+    } else {
+      setValue('start_time', `${datePrefix}T09:00`)
+      setValue('end_time', `${datePrefix}T10:00`)
+    }
+  }
+
   async function onSubmit({ title, description, start_time, end_time, type, status, color, task_id }: FormData) {
     const payload = {
       title,
@@ -125,7 +145,12 @@ export function EventFormModal({ open, onClose, event, defaultDate }: EventFormM
     <Modal open={open} onClose={onClose} title={isEditing ? 'Editar evento' : 'Novo evento'} size="lg">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4" noValidate>
         <FormField label="Título" error={errors.title?.message}>
-          <Input placeholder="Ex: Reunião de equipe" autoFocus error={!!errors.title} {...register('title')} />
+          <Input
+            placeholder="Ex: Reunião de equipe"
+            autoFocus
+            error={!!errors.title}
+            {...register('title')}
+          />
         </FormField>
 
         <FormField label="Descrição" error={errors.description?.message}>
@@ -137,14 +162,42 @@ export function EventFormModal({ open, onClose, event, defaultDate }: EventFormM
           />
         </FormField>
 
+        <label className="flex items-center gap-2.5 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={allDay}
+            onChange={(e) => handleAllDayToggle(e.target.checked)}
+            className="size-4 rounded border-gray-300 dark:border-slate-500 accent-indigo-600"
+          />
+          <span className="text-sm text-gray-700 dark:text-slate-300">Dia inteiro</span>
+        </label>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Início" error={errors.start_time?.message}>
-            <Input type="datetime-local" error={!!errors.start_time} {...register('start_time')} />
+            <Input
+              type="datetime-local"
+              error={!!errors.start_time}
+              className={allDay ? 'opacity-60 cursor-not-allowed' : ''}
+              {...register('start_time')}
+              readOnly={allDay}
+            />
           </FormField>
           <FormField label="Fim" error={errors.end_time?.message}>
-            <Input type="datetime-local" error={!!errors.end_time} {...register('end_time')} />
+            <Input
+              type="datetime-local"
+              error={!!errors.end_time}
+              className={allDay ? 'opacity-60 cursor-not-allowed' : ''}
+              {...register('end_time')}
+              readOnly={allDay}
+            />
           </FormField>
         </div>
+
+        {allDay && (
+          <p className="text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg px-3 py-2">
+            Evento de dia inteiro: ocupa das 00:00 às 23:59.
+          </p>
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Tipo" error={errors.type?.message}>
@@ -180,7 +233,9 @@ export function EventFormModal({ open, onClose, event, defaultDate }: EventFormM
                 onClick={() => setValue('color', color)}
                 className={cn(
                   'size-7 rounded-full transition-transform hover:scale-110 border-2',
-                  selectedColor === color ? 'border-gray-900 dark:border-white scale-110' : 'border-transparent',
+                  selectedColor === color
+                    ? 'border-gray-900 dark:border-white scale-110'
+                    : 'border-transparent',
                 )}
                 style={{ backgroundColor: color }}
                 aria-label={color}
